@@ -3684,12 +3684,35 @@ exports.default = ()=>({
         nickname: localStorage.getItem("nickname") || "",
         editing: !localStorage.getItem("nickname"),
         position: "?st",
+        response: "",
         alreadyFound: false,
+        checkedOthers: false,
+        reported: false,
+        reporting: false,
+        cannotSave () {
+            return this.reported || this.alreadyFound || !this.nickname || this.editing;
+        },
         userId: localStorage.getItem("userId") || crypto.randomUUID() || "unknown",
         async init () {
-            console.log({
-                duck_id: this.id
-            });
+            localStorage.setItem("userId", this.userId);
+            if (document.location.hostname == "localhost") {
+                setTimeout(()=>{
+                    this.position = (0, _ordinalDefault.default)(Math.round(Math.random() * 100) + 10);
+                    this.alreadyFound = Math.random() > 0.7;
+                    this.checkedOthers = true;
+                    if (!this.alreadyFound) {
+                        setTimeout(()=>{
+                            this.reporting = true;
+                            this.reported = true;
+                        }, 600);
+                        setTimeout(()=>{
+                            this.response = "sighting created";
+                            this.reporting = false;
+                        }, 1200);
+                    }
+                }, 200);
+                return;
+            }
             const others = await (0, _anqrJs.processSightings)((acc, sighting)=>acc.add(sighting.user_id), new Set(), {
                 lambda: "https://gu2gplqrllxktghwcdrbpxhhce0tqlbx.lambda-url.eu-north-1.on.aws/",
                 params: {
@@ -3698,20 +3721,16 @@ exports.default = ()=>({
             });
             this.position = (0, _ordinalDefault.default)(others.size + 1);
             this.alreadyFound = others.has(this.userId);
+            this.checkedOthers = true;
         },
         saveNickname () {
             if (this.nickname.trim()) {
-                localStorage.setItem("nickname", this.nickname);
+                localStorage.setItem("nickname", this.nickname.trim());
                 this.editing = false;
             }
         },
         report () {
-            if (!this.nickname.trim()) {
-                alert("Please enter a nickname first.");
-                return;
-            }
-            localStorage.setItem("nickname", this.nickname);
-            localStorage.setItem("userId", this.userId);
+            this.reporting = true;
             fetch("https://7qqeuzwht3w44weoj7tmw73fyq0xndgj.lambda-url.eu-north-1.on.aws/", {
                 method: "POST",
                 headers: {
@@ -3722,7 +3741,11 @@ exports.default = ()=>({
                     user_id: this.userId,
                     nickname: this.nickname
                 })
-            }).then((response)=>response.text()).then((msg)=>alert(msg)).catch((error)=>alert("Error sending report." + error));
+            }).then((response)=>response.json()).then(({ message })=>{
+                this.reporting = false;
+                this.reported = true;
+                this.response = message;
+            }).catch((error)=>alert("Error sending report." + error));
         }
     });
 
